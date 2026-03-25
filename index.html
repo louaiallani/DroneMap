@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drone Map - Hyperrealistic Quadcopter Flight Simulator</title>
+    
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            font-family: 'Rubik', sans-serif;
+        }
+
+        
+        #top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background: #000000;
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #top-bar-text {
+            color: #d0d0d0;
+            font-size: 11px;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+        }
+        
+        #container {
+            position: relative;
+            width: 100vw;
+            height: calc(100vh - 40px);
+            margin-top: 40px;
+            perspective: 1000px;
+            perspective-origin: 50% 50%;
+            overflow: hidden;
+        }
+        
+        
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 200%; 
+            z-index: 1;
+            transform-origin: center center;
+            transform: rotateX(60deg) translateY(-25%) scale(1.2);
+            transform-style: preserve-3d;
+        }
+        
+        
+        #three-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        
+        #sky-gradient {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 40%;
+            z-index: 5;
+            background: linear-gradient(to bottom, 
+                #1e90ff 0%, 
+                #87ceeb 40%,
+                #b0e0e6 70%,
+                rgba(176, 224, 230, 0) 100%);
+            pointer-events: none;
+        }
+        
+        
+        #left-panel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 280px;
+            height: 100%;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.85);
+            color: #ffffff;
+            font-family: 'Rubik', sans-serif;
+            font-size: 13px;
+            border-right: 1px solid rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        
+        #webcam-video {
+            display: none;
+        }
+
+        .panel-section {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .panel-section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            padding: 4px 0;
+        }
+
+        .stat-label {
+            color: #888888;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .stat-group {
+            margin-bottom: 15px;
+        }
+
+        .stat-group-title {
+            color: #666666;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        
+        .control-row {
+            display: flex;
+            align-items: center;
+            margin: 6px 0;
+            font-size: 12px;
+        }
+
+        .control-keys {
+            display: flex;
+            gap: 4px;
+            margin-right: 12px;
+            min-width: 60px;
+        }
+
+        .control-key {
+            background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: bold;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .control-action {
+            color: #888888;
+            font-size: 11px;
+        }
+
+        
+        .status-bar {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            margin-top: 4px;
+        }
+
+        .status-bar-fill {
+            height: 100%;
+            background: #ffffff;
+            transition: width 0.1s ease;
+        }
+
+        
+        #minimap-frame {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 200px;
+            height: 200px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            z-index: 120;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        #minimap-map {
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        
+        #minimap-map .leaflet-control-container {
+            display: none;
+        }
+
+        
+        #minimap-label {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 200px;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.9);
+            font-family: 'Rubik', sans-serif;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 121;
+            pointer-events: none;
+            transform: translateY(-18px);
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+        }
+
+        
+        #minimap-crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 125;
+        }
+
+        #minimap-crosshair::before,
+        #minimap-crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        #minimap-crosshair::before {
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #minimap-crosshair::after {
+            width: 100%;
+            height: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        
+        #detection-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 200px;
+            height: 200px;
+            pointer-events: none;
+            z-index: 124;
+        }
+
+        
+        #webcam-panel {
+            position: absolute;
+            top: 240px;
+            right: 20px;
+            width: 200px;
+            height: 150px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            z-index: 120;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+        }
+
+        #webcam-panel-header {
+            padding: 6px 10px;
+            background: rgba(0, 0, 0, 0.8);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            font-family: 'Rubik', sans-serif;
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #00ffc3;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #webcam-status {
+            font-size: 8px;
+            color: #888;
+        }
+
+        #webcam-video-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #webcam-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #webcam-detection-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        #connect-webcam-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 8px 16px;
+            font-family: 'Rubik', sans-serif;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(0, 255, 195, 0.2);
+            color: #00ffc3;
+            border: 1px solid #00ffc3;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #connect-webcam-btn:hover {
+            background: rgba(0, 255, 195, 0.4);
+        }
+
+        
+        #detection-status-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 300px;
+            padding: 8px 16px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(0, 255, 195, 0.3);
+            border-radius: 4px;
+            z-index: 100;
+            font-family: 'Rubik', sans-serif;
+            font-size: 11px;
+            color: #00ffc3;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #detection-status-bar .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        #detection-status-bar .status-dot.active {
+            background: #00ff00;
+            box-shadow: 0 0 8px #00ff00;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    
+    <div id="top-bar">
+        <span id="top-bar-text">&copy; Louai Allani 2026</span>
+    </div>
+
+    <div id="container">
+        
+        <div id="sky-gradient"></div>
+        
+        
+        <div id="map"></div>
+        
+        
+        <canvas id="three-canvas"></canvas>
+
+        
+        <video id="webcam-video" autoplay playsinline muted></video>
+
+        
+        <div id="minimap-label">DRONE GROUND VIEW</div>
+        <div id="minimap-frame">
+            <div id="minimap-map"></div>
+            <canvas id="detection-canvas"></canvas>
+            <div id="minimap-crosshair"></div>
+        </div>
+
+        
+        <div id="webcam-panel">
+            <div id="webcam-panel-header">
+                <span>DETECTION SOURCE</span>
+                <span id="webcam-status">DISCONNECTED</span>
+            </div>
+            <div id="webcam-video-container">
+                <video id="webcam-feed" autoplay playsinline muted></video>
+                <canvas id="webcam-detection-canvas"></canvas>
+                <button id="connect-webcam-btn">CONNECT CAMERA</button>
+            </div>
+        </div>
+
+        
+        <div id="detection-status-bar">
+            <div class="status-dot" id="detection-dot"></div>
+            <span id="detection-status">Initializing...</span>
+            <span id="detection-count">0 detections</span>
+        </div>
+        
+        
+        <div id="left-panel">
+            
+            <div class="panel-section">
+                <div class="section-title">DRONE TELEMETRY</div>
+                
+                <div class="stat-group">
+                    <div class="stat-group-title">Position</div>
+                    <div class="stat-row">
+                        <span class="stat-label">Latitude</span>
+                        <span class="stat-value" id="hud-lat">0.000000</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Longitude</span>
+                        <span class="stat-value" id="hud-lng">0.000000</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Altitude</span>
+                        <span class="stat-value" id="hud-alt">0.0 m</span>
+                    </div>
+                </div>
+
+                <div class="stat-group">
+                    <div class="stat-group-title">Movement</div>
+                    <div class="stat-row">
+                        <span class="stat-label">Ground Speed</span>
+                        <span class="stat-value" id="hud-speed">0.0 m/s</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Vertical Speed</span>
+                        <span class="stat-value" id="hud-vspeed">0.0 m/s</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Heading</span>
+                        <span class="stat-value" id="hud-heading">0</span>
+                    </div>
+                </div>
+
+                <div class="stat-group">
+                    <div class="stat-group-title">Attitude</div>
+                    <div class="stat-row">
+                        <span class="stat-label">Pitch</span>
+                        <span class="stat-value" id="hud-pitch">0.0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Roll</span>
+                        <span class="stat-value" id="hud-roll">0.0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Yaw Rate</span>
+                        <span class="stat-value" id="hud-yawrate">0.0 /s</span>
+                    </div>
+                </div>
+
+                <div class="stat-group">
+                    <div class="stat-group-title">Velocity Components</div>
+                    <div class="stat-row">
+                        <span class="stat-label">Vel X</span>
+                        <span class="stat-value" id="hud-velx">0.0 m/s</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Vel Y</span>
+                        <span class="stat-value" id="hud-vely">0.0 m/s</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Vel Z</span>
+                        <span class="stat-value" id="hud-velz">0.0 m/s</span>
+                    </div>
+                </div>
+
+                <div class="stat-group">
+                    <div class="stat-group-title">Target</div>
+                    <div class="stat-row">
+                        <span class="stat-label">Target Alt</span>
+                        <span class="stat-value" id="hud-targetalt">0.0 m</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://unpkg.com/three@0.160.0/build/three.module.js" type="module"></script>
+    
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+        const ORIGIN_LAT = 37.7749;
+        const ORIGIN_LNG = -122.4194;
+        const INITIAL_ZOOM = 18;
+        const METERS_PER_DEG_LAT = 111000;
+        const METERS_PER_DEG_LNG = 111000 * Math.cos(ORIGIN_LAT * Math.PI / 180);
+        const GRAVITY = 9.81;
+        const MASS = 1.6;
+        const DRAG_COEFFICIENT = 0.32;
+        const ANGULAR_DRAG = 4.0;
+        const MAX_SPEED = 16;
+        const MAX_VERTICAL_SPEED = 7;
+        const TILT_ANGLE = 0.38;
+        const YAW_ACCEL = 6;
+        const ACCELERATION = 14;
+        const ALTITUDE_RESPONSE = 5.5;
+        const ALTITUDE_DAMPING = 3.2;
+        const WIND_GUST = 0.4;
+        const AUTO_LEVEL = 2.5;
+        const INPUT_SMOOTHING = 5;
+        
+        let map;
+        let minimapMap;
+        let droneMarker;
+        let scene, camera, renderer;
+        let drone, propellers = [];
+        let clock;
+            let shadowBlob;
+        let detectionModel = null;
+        let detectionCanvas = null;
+        let detectionCtx = null;
+        let webcamDetectionCanvas = null;
+        let webcamDetectionCtx = null;
+        let webcamVideo = null;
+        let webcamFeed = null;
+        let webcamStream = null;
+        let isDetecting = false;
+        let detectionLog = [];
+        let totalDetections = 0;
+        let lastDetectionTime = 0;
+        let isWebcamConnected = false;
+        const DETECTION_INTERVAL = 50;
+        const droneState = {
+            position: new THREE.Vector3(0, 8, 0),
+            velocity: new THREE.Vector3(0, 0, 0),
+            roll: 0,
+            pitch: 0,
+            yaw: 0,
+            rollVelocity: 0,
+            pitchVelocity: 0,
+            yawVelocity: 0,
+            wobblePhase: 0,
+            smoothedForward: 0,
+            smoothedStrafe: 0,
+            smoothedAltitude: 0,
+            smoothedYaw: 0,
+            targetAltitude: 8
+        };
+        const inputState = {
+            forward: 0,
+            strafe: 0,
+            yaw: 0,
+            altitude: 0
+        };
+        const cameraState = {
+            position: new THREE.Vector3(0, 50, 30),
+            lookAt: new THREE.Vector3(0, 30, 0)
+        };
+        const mapFollowState = {
+            currentLat: ORIGIN_LAT,
+            currentLng: ORIGIN_LNG,
+            currentZoom: INITIAL_ZOOM
+        };
+        const mapSettings = {
+            lerpFactor: 0.05,
+            lookAheadFactor: 0.00003,
+            zoomSpeed: 0.03,
+            minZoom: 16,
+            maxZoom: 20,
+            altDivisor: 20
+        };
+        
+        
+        function localToLatLng(x, y, z) {
+            const lat = ORIGIN_LAT - (z / METERS_PER_DEG_LAT);
+            const lng = ORIGIN_LNG + (x / METERS_PER_DEG_LNG);
+            const alt = y;
+            return { lat, lng, alt };
+        }
+        
+        
+        function latLngToLocal(lat, lng, alt) {
+            const x = (lng - ORIGIN_LNG) * METERS_PER_DEG_LNG;
+            const z = -(lat - ORIGIN_LAT) * METERS_PER_DEG_LAT;
+            const y = alt;
+            return new THREE.Vector3(x, y, z);
+        }
+        
+        function initMap() {
+            map = L.map('map', {
+                center: [ORIGIN_LAT, ORIGIN_LNG],
+                zoom: INITIAL_ZOOM,
+                zoomControl: true,
+                attributionControl: true,
+                dragging: true,
+                scrollWheelZoom: true,
+                doubleClickZoom: false,
+                boxZoom: false,
+                keyboard: false
+            });
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+                maxZoom: 20
+            }).addTo(map);
+            droneMarker = L.circleMarker([ORIGIN_LAT, ORIGIN_LNG], {
+                radius: 6,
+                weight: 2,
+                color: '#00ffc3',
+                fillColor: '#00ffc3',
+                fillOpacity: 0.35
+            }).addTo(map);
+            minimapMap = L.map('minimap-map', {
+                center: [ORIGIN_LAT, ORIGIN_LNG],
+                zoom: 19,
+                zoomControl: false,
+                attributionControl: false,
+                dragging: false,
+                scrollWheelZoom: false,
+                doubleClickZoom: false,
+                boxZoom: false,
+                keyboard: false,
+                touchZoom: false
+            });
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 20
+            }).addTo(minimapMap);
+        }
+        
+        
+        function updateMap() {
+            const coords = localToLatLng(
+                droneState.position.x,
+                droneState.position.y,
+                droneState.position.z
+            );
+            const smoothFactor = 0.015;
+            mapFollowState.currentLat += (coords.lat - mapFollowState.currentLat) * smoothFactor;
+            mapFollowState.currentLng += (coords.lng - mapFollowState.currentLng) * smoothFactor;
+            const targetZoom = Math.max(mapSettings.minZoom, Math.min(mapSettings.maxZoom, mapSettings.maxZoom - (droneState.position.y / mapSettings.altDivisor)));
+            mapFollowState.currentZoom += (targetZoom - mapFollowState.currentZoom) * 0.01;
+            map.setView([mapFollowState.currentLat, mapFollowState.currentLng], mapFollowState.currentZoom, {
+                animate: false,
+                duration: 0
+            });
+            if (droneMarker) {
+                droneMarker.setLatLng([coords.lat, coords.lng]);
+            }
+            if (minimapMap) {
+                const minimapZoom = Math.max(17, Math.min(20, 20 - (droneState.position.y / 30)));
+                minimapMap.setView([coords.lat, coords.lng], minimapZoom, {
+                    animate: false,
+                    duration: 0
+                });
+            }
+            
+            return coords;
+        }
+        
+        function initThree() {
+            const canvas = document.getElementById('three-canvas');
+            scene = new THREE.Scene();
+            scene.background = null;
+            camera = new THREE.PerspectiveCamera(
+                60,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+            camera.position.set(0, 44, 28);
+            camera.lookAt(0, 26, 0);
+            renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                alpha: true,
+                antialias: true
+            });
+            renderer.setClearColor(0x000000, 0);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.35;
+            const envMap = loadEnvironmentMap();
+            scene.environment = envMap;
+            scene.environmentIntensity = 1.05;
+            setupLighting();
+            createDrone(envMap);
+            createGroundReference();
+            clock = new THREE.Clock();
+            window.addEventListener('resize', onWindowResize);
+        }
+        
+        function setupLighting() {
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+            const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            sunLight.position.set(50, 100, 50);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 500;
+            sunLight.shadow.camera.left = -50;
+            sunLight.shadow.camera.right = 50;
+            sunLight.shadow.camera.top = 50;
+            sunLight.shadow.camera.bottom = -50;
+            scene.add(sunLight);
+            const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+            fillLight.position.set(-30, 50, -30);
+            scene.add(fillLight);
+            const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x3d5c5c, 0.5);
+            scene.add(hemiLight);
+            const rimLight = new THREE.PointLight(0x66ccff, 0.8, 80);
+            rimLight.position.set(0, 12, -6);
+            scene.add(rimLight);
+        }
+
+        function loadEnvironmentMap() {
+            const envLoader = new THREE.CubeTextureLoader();
+            envLoader.setPath('https://threejs.org/examples/textures/cube/MilkyWay/');
+            const envMap = envLoader.load([
+                'dark-s_px.jpg',
+                'dark-s_nx.jpg',
+                'dark-s_py.jpg',
+                'dark-s_ny.jpg',
+                'dark-s_pz.jpg',
+                'dark-s_nz.jpg'
+            ]);
+            envMap.colorSpace = THREE.SRGBColorSpace;
+            return envMap;
+        }
+
+        function createCarbonTexture() {
+            const size = 64;
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#0d0f13';
+            ctx.fillRect(0, 0, size, size);
+            ctx.fillStyle = '#171b22';
+            for (let y = 0; y < size; y += 8) {
+                for (let x = 0; x < size; x += 8) {
+                    ctx.fillRect(x, y, 6, 4);
+                    ctx.fillRect(x + 4, y + 4, 6, 4);
+                }
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(4, 4);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            return tex;
+        }
+        
+        function createDrone(envMap) {
+            drone = new THREE.Group();
+            const textureLoader = new THREE.TextureLoader();
+            const microNormal = textureLoader.load('https://threejs.org/examples/textures/waternormals.jpg');
+            microNormal.wrapS = microNormal.wrapT = THREE.RepeatWrapping;
+            microNormal.repeat.set(6, 6);
+
+            const carbonWeave = createCarbonTexture();
+            const bodyMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x0e1118,
+                metalness: 0.68,
+                roughness: 0.24,
+                clearcoat: 0.8,
+                clearcoatRoughness: 0.05,
+                sheen: 0.5,
+                sheenRoughness: 0.6,
+                envMap,
+                envMapIntensity: 1.2,
+                normalMap: microNormal,
+                normalScale: new THREE.Vector2(0.12, 0.12)
+            });
+            
+            const armMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x10131a,
+                metalness: 0.62,
+                roughness: 0.18,
+                clearcoat: 0.3,
+                clearcoatRoughness: 0.12,
+                envMap,
+                envMapIntensity: 1.1,
+                map: carbonWeave,
+                normalMap: carbonWeave,
+                normalScale: new THREE.Vector2(0.25, 0.25)
+            });
+            
+            const motorMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x1a1f28,
+                metalness: 1,
+                roughness: 0.12,
+                clearcoat: 0.55,
+                envMap,
+                envMapIntensity: 1.35,
+                normalMap: microNormal,
+                normalScale: new THREE.Vector2(0.1, 0.1)
+            });
+
+            const tpuMaterial = new THREE.MeshStandardMaterial({
+                color: 0xff7b1f,
+                metalness: 0.05,
+                roughness: 0.38,
+                emissive: 0x3f1a00,
+                emissiveIntensity: 0.35
+            });
+            
+            const propellerMaterial = new THREE.MeshStandardMaterial({
+                color: 0x060606,
+                metalness: 0.08,
+                roughness: 0.38,
+                transparent: true,
+                opacity: 0.82,
+                envMap,
+                envMapIntensity: 0.8
+            });
+            
+            const accentMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00ffc3,
+                metalness: 0.42,
+                roughness: 0.35,
+                emissive: 0x00e0b0,
+                emissiveIntensity: 0.5,
+                envMap,
+                envMapIntensity: 1.1
+            });
+            
+            const ledMaterial = new THREE.MeshStandardMaterial({
+                color: 0x66ffcc,
+                emissive: 0x33ffcc,
+                emissiveIntensity: 1.6,
+                envMap,
+                envMapIntensity: 0.6
+            });
+            
+            const cameraMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x090b0e,
+                metalness: 1,
+                roughness: 0.06,
+                clearcoat: 0.55,
+                envMap,
+                envMapIntensity: 1.4
+            });
+            
+            const glassMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x5ab0ff,
+                metalness: 0.08,
+                roughness: 0,
+                transmission: 0.95,
+                thickness: 0.12,
+                transparent: true,
+                opacity: 0.72,
+                ior: 1.48,
+                envMap,
+                envMapIntensity: 1.1
+            });
+            const bodyTopGeometry = new THREE.CylinderGeometry(0.3, 0.34, 0.13, 8);
+            const bodyTop = new THREE.Mesh(bodyTopGeometry, bodyMaterial);
+            bodyTop.position.y = 0.09;
+            bodyTop.castShadow = true;
+            drone.add(bodyTop);
+            const bodyBottomGeometry = new THREE.CylinderGeometry(0.34, 0.3, 0.08, 8);
+            const bodyBottom = new THREE.Mesh(bodyBottomGeometry, bodyMaterial);
+            bodyBottom.position.y = -0.025;
+            bodyBottom.castShadow = true;
+            drone.add(bodyBottom);
+            const batteryGeometry = new THREE.BoxGeometry(0.28, 0.1, 0.16);
+            const battery = new THREE.Mesh(batteryGeometry, accentMaterial);
+            battery.position.set(0, 0.26, -0.02);
+            battery.castShadow = true;
+            drone.add(battery);
+            const strapGeometry = new THREE.BoxGeometry(0.32, 0.02, 0.05);
+            const strap = new THREE.Mesh(strapGeometry, tpuMaterial);
+            strap.position.set(0, 0.29, -0.02);
+            strap.castShadow = true;
+            drone.add(strap);
+            const buckleGeometry = new THREE.BoxGeometry(0.05, 0.025, 0.05);
+            const buckle = new THREE.Mesh(buckleGeometry, motorMaterial);
+            buckle.position.set(0.17, 0.295, -0.02);
+            drone.add(buckle);
+            const stripeGeometry = new THREE.BoxGeometry(0.12, 0.01, 0.45);
+            const stripe = new THREE.Mesh(stripeGeometry, accentMaterial);
+            stripe.position.set(0, 0.23, 0);
+            stripe.castShadow = true;
+            drone.add(stripe);
+            const gpsGeometry = new THREE.SphereGeometry(0.11, 24, 16);
+            const gps = new THREE.Mesh(gpsGeometry, bodyMaterial);
+            gps.position.set(0, 0.3, -0.06);
+            gps.castShadow = true;
+            drone.add(gps);
+            const ventGeometry = new THREE.BoxGeometry(0.02, 0.005, 0.16);
+            for (let i = -2; i <= 2; i++) {
+                const vent = new THREE.Mesh(ventGeometry, armMaterial);
+                vent.position.set(i * 0.035, 0.21, 0.12);
+                vent.castShadow = true;
+                drone.add(vent);
+            }
+            const armPositions = [
+                { x: 1, z: 1, angle: Math.PI / 4 },
+                { x: -1, z: 1, angle: 3 * Math.PI / 4 },
+                { x: -1, z: -1, angle: 5 * Math.PI / 4 },
+                { x: 1, z: -1, angle: 7 * Math.PI / 4 }
+            ];
+            
+            const armLength = 0.46;
+            const motorRadius = 0.075;
+            const armRadius = 0.026;
+            const armPlateOffset = 0.055;
+            
+            armPositions.forEach((pos, index) => {
+                const armGeometry = new THREE.CapsuleGeometry(armRadius, armLength * 0.8, 12, 24);
+                const arm = new THREE.Mesh(armGeometry, armMaterial);
+                arm.scale.set(1, 1, 1.18);
+                arm.position.set(pos.x * armLength * 0.5, 0.02, pos.z * armLength * 0.5);
+                arm.rotation.y = pos.angle;
+                arm.castShadow = true;
+                drone.add(arm);
+                const braceGeometry = new THREE.BoxGeometry(armLength * 0.65, 0.012, 0.12);
+                const brace = new THREE.Mesh(braceGeometry, armMaterial);
+                brace.position.set(pos.x * armLength * 0.5, -armPlateOffset, pos.z * armLength * 0.5);
+                brace.rotation.y = pos.angle;
+                brace.castShadow = true;
+                drone.add(brace);
+                const motorGeometry = new THREE.CylinderGeometry(motorRadius, motorRadius * 1.1, 0.1, 24);
+                const motor = new THREE.Mesh(motorGeometry, motorMaterial);
+                motor.position.set(pos.x * armLength, 0.08, pos.z * armLength);
+                motor.castShadow = true;
+                drone.add(motor);
+                const finGeometry = new THREE.CylinderGeometry(motorRadius * 1.05, motorRadius * 1.05, 0.02, 32, 1, true);
+                const fins = new THREE.Mesh(finGeometry, bodyMaterial);
+                fins.position.set(pos.x * armLength, 0.12, pos.z * armLength);
+                fins.rotation.y = Math.PI / 8;
+                drone.add(fins);
+                const motorCapGeometry = new THREE.CylinderGeometry(motorRadius * 0.6, motorRadius * 0.6, 0.03, 20);
+                const motorCap = new THREE.Mesh(motorCapGeometry, accentMaterial);
+                motorCap.position.set(pos.x * armLength, 0.14, pos.z * armLength);
+                drone.add(motorCap);
+                const ringGeometry = new THREE.TorusGeometry(motorRadius * 1.05, 0.006, 8, 24);
+                const ring = new THREE.Mesh(ringGeometry, accentMaterial);
+                ring.rotation.x = Math.PI / 2;
+                ring.position.set(pos.x * armLength, 0.11, pos.z * armLength);
+                ring.castShadow = true;
+                drone.add(ring);
+                const propellerGroup = new THREE.Group();
+                propellerGroup.position.set(pos.x * armLength, 0.16, pos.z * armLength);
+                const hubGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.02, 8);
+                const hub = new THREE.Mesh(hubGeometry, motorMaterial);
+                propellerGroup.add(hub);
+                for (let b = 0; b < 2; b++) {
+                    const bladeGeometry = new THREE.BoxGeometry(0.35, 0.012, 0.035);
+                    const blade = new THREE.Mesh(bladeGeometry, propellerMaterial);
+                    blade.rotation.y = b * Math.PI;
+                    blade.rotation.z = THREE.MathUtils.degToRad(6) * (b === 0 ? 1 : -1);
+                    blade.position.y = 0.002;
+                    blade.castShadow = true;
+                    propellerGroup.add(blade);
+                }
+                const discGeometry = new THREE.CircleGeometry(0.18, 64);
+                const discMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x00ffc3,
+                    transparent: true,
+                    opacity: 0.12,
+                    side: THREE.DoubleSide
+                });
+                const disc = new THREE.Mesh(discGeometry, discMaterial);
+                disc.rotation.x = -Math.PI / 2;
+                disc.position.y = 0.01;
+                propellerGroup.add(disc);
+                const disc2Geometry = new THREE.RingGeometry(0.12, 0.24, 64);
+                const disc2Material = new THREE.MeshBasicMaterial({
+                    color: 0x00ffc3,
+                    transparent: true,
+                    opacity: 0.08,
+                    side: THREE.DoubleSide
+                });
+                const disc2 = new THREE.Mesh(disc2Geometry, disc2Material);
+                disc2.rotation.x = -Math.PI / 2;
+                disc2.position.y = 0.012;
+                propellerGroup.add(disc2);
+                
+                drone.add(propellerGroup);
+                propellers.push(propellerGroup);
+            });
+            const standoffPositions = [
+                { x: 0.16, z: 0.16 },
+                { x: -0.16, z: 0.16 },
+                { x: -0.16, z: -0.16 },
+                { x: 0.16, z: -0.16 }
+            ];
+
+            const standoffGeometry = new THREE.CylinderGeometry(0.01, 0.01, 0.25, 10);
+            standoffPositions.forEach(pos => {
+                const standoff = new THREE.Mesh(standoffGeometry, motorMaterial);
+                standoff.position.set(pos.x, 0.05, pos.z);
+                standoff.castShadow = true;
+                drone.add(standoff);
+            });
+
+            const stackPlateGeometry = new THREE.BoxGeometry(0.26, 0.01, 0.26);
+            const stackBottom = new THREE.Mesh(stackPlateGeometry, armMaterial);
+            stackBottom.position.set(0, -0.01, 0);
+            stackBottom.castShadow = true;
+            drone.add(stackBottom);
+
+            const stackTop = new THREE.Mesh(stackPlateGeometry, armMaterial);
+            stackTop.position.set(0, 0.13, 0);
+            stackTop.castShadow = true;
+            drone.add(stackTop);
+            const skidGeometry = new THREE.BoxGeometry(0.14, 0.04, 0.35);
+            const skidLeft = new THREE.Mesh(skidGeometry, tpuMaterial);
+            skidLeft.position.set(-0.16, -0.2, 0);
+            skidLeft.castShadow = true;
+            drone.add(skidLeft);
+
+            const skidRight = skidLeft.clone();
+            skidRight.position.x = 0.16;
+            drone.add(skidRight);
+            const gimbalGroup = new THREE.Group();
+            gimbalGroup.position.set(0, -0.02, 0.34);
+            gimbalGroup.rotation.x = THREE.MathUtils.degToRad(-20);
+            const gimbalHousingGeometry = new THREE.BoxGeometry(0.1, 0.08, 0.1);
+            const gimbalHousing = new THREE.Mesh(gimbalHousingGeometry, bodyMaterial);
+            gimbalGroup.add(gimbalHousing);
+            const lensGeometry = new THREE.CylinderGeometry(0.025, 0.03, 0.04, 16);
+            const lens = new THREE.Mesh(lensGeometry, cameraMaterial);
+            lens.rotation.x = Math.PI / 2;
+            lens.position.z = 0.07;
+            gimbalGroup.add(lens);
+            const lensGlassGeometry = new THREE.CircleGeometry(0.025, 32);
+            const lensGlass = new THREE.Mesh(lensGlassGeometry, glassMaterial);
+            lensGlass.position.z = 0.09;
+            gimbalGroup.add(lensGlass);
+            const bezelGeometry = new THREE.TorusGeometry(0.028, 0.004, 10, 40);
+            const bezel = new THREE.Mesh(bezelGeometry, motorMaterial);
+            bezel.rotation.x = Math.PI / 2;
+            bezel.position.z = 0.07;
+            gimbalGroup.add(bezel);
+            
+            drone.add(gimbalGroup);
+            const frontLedGeometry = new THREE.SphereGeometry(0.015, 8, 8);
+            const frontLedLeft = new THREE.Mesh(frontLedGeometry, ledMaterial);
+            frontLedLeft.position.set(-0.2, 0.05, 0.35);
+            drone.add(frontLedLeft);
+            
+            const frontLedRight = new THREE.Mesh(frontLedGeometry, ledMaterial);
+            frontLedRight.position.set(0.2, 0.05, 0.35);
+            drone.add(frontLedRight);
+            const rearLedMaterial = new THREE.MeshStandardMaterial({
+                color: 0xff3355,
+                emissive: 0xff1133,
+                emissiveIntensity: 1.2
+            });
+            
+            const rearLedLeft = new THREE.Mesh(frontLedGeometry, rearLedMaterial);
+            rearLedLeft.position.set(-0.2, 0.05, -0.35);
+            drone.add(rearLedLeft);
+            
+            const rearLedRight = new THREE.Mesh(frontLedGeometry, rearLedMaterial);
+            rearLedRight.position.set(0.2, 0.05, -0.35);
+            drone.add(rearLedRight);
+            const antennaBaseGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.05, 10);
+            const antennaBase = new THREE.Mesh(antennaBaseGeometry, tpuMaterial);
+            antennaBase.position.set(-0.08, 0.22, -0.28);
+            drone.add(antennaBase);
+
+            const antennaStemGeometry = new THREE.CylinderGeometry(0.007, 0.007, 0.35, 12);
+            const antennaStem = new THREE.Mesh(antennaStemGeometry, motorMaterial);
+            antennaStem.position.set(-0.08, 0.4, -0.28);
+            antennaStem.rotation.x = THREE.MathUtils.degToRad(-12);
+            drone.add(antennaStem);
+
+            const antennaCapGeometry = new THREE.SphereGeometry(0.025, 14, 10);
+            const antennaCap = new THREE.Mesh(antennaCapGeometry, tpuMaterial);
+            antennaCap.position.set(-0.08, 0.575, -0.33);
+            antennaCap.castShadow = true;
+            drone.add(antennaCap);
+            drone.scale.set(0.9, 0.9, 0.9);
+            drone.position.copy(droneState.position);
+            
+            scene.add(drone);
+            const shadowGeometry = new THREE.CircleGeometry(1.4, 48);
+            const shadowMaterial = new THREE.MeshBasicMaterial({
+                color: 0x000000,
+                transparent: true,
+                opacity: 0.25
+            });
+            shadowBlob = new THREE.Mesh(shadowGeometry, shadowMaterial);
+            shadowBlob.rotation.x = -Math.PI / 2;
+            shadowBlob.position.set(droneState.position.x, 0.02, droneState.position.z);
+            scene.add(shadowBlob);
+        }
+        
+        function createGroundReference() {
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function initControls() {
+            const keyStates = {};
+            
+            document.addEventListener('keydown', (event) => {
+                keyStates[event.code] = true;
+                updateInputFromKeys(keyStates);
+            });
+            
+            document.addEventListener('keyup', (event) => {
+                keyStates[event.code] = false;
+                updateInputFromKeys(keyStates);
+            });
+            document.addEventListener('keydown', (event) => {
+                if (['KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyQ', 'KeyE', 'KeyR', 'KeyF', 'PageUp', 'PageDown', 'Space'].includes(event.code)) {
+                    event.preventDefault();
+                }
+            });
+        }
+        
+        function updateInputFromKeys(keyStates) {
+            inputState.forward = 0;
+            if (keyStates['KeyW']) inputState.forward += 1;
+            if (keyStates['KeyS']) inputState.forward -= 1;
+            inputState.strafe = 0;
+            if (keyStates['KeyD']) inputState.strafe += 1;
+            if (keyStates['KeyA']) inputState.strafe -= 1;
+            inputState.yaw = 0;
+            if (keyStates['KeyQ']) inputState.yaw += 1;
+            if (keyStates['KeyE']) inputState.yaw -= 1;
+            inputState.altitude = 0;
+            if (keyStates['KeyR'] || keyStates['PageUp']) inputState.altitude += 1;
+            if (keyStates['KeyF'] || keyStates['PageDown']) inputState.altitude -= 1;
+        }
+        
+        
+        function updatePhysics(deltaTime) {
+            deltaTime = Math.min(deltaTime, 0.05);
+            const smoothing = 1 - Math.exp(-INPUT_SMOOTHING * deltaTime);
+            droneState.smoothedForward += (inputState.forward - droneState.smoothedForward) * smoothing;
+            droneState.smoothedStrafe += (inputState.strafe - droneState.smoothedStrafe) * smoothing;
+            droneState.smoothedAltitude += (inputState.altitude - droneState.smoothedAltitude) * smoothing;
+            droneState.smoothedYaw += (inputState.yaw - droneState.smoothedYaw) * smoothing;
+            const forwardX = Math.sin(droneState.yaw);
+            const forwardZ = -Math.cos(droneState.yaw);
+            const rightX = Math.cos(droneState.yaw);
+            const rightZ = Math.sin(droneState.yaw);
+            const targetVelX = (droneState.smoothedForward * forwardX + droneState.smoothedStrafe * rightX) * MAX_SPEED;
+            const targetVelZ = (droneState.smoothedForward * forwardZ + droneState.smoothedStrafe * rightZ) * MAX_SPEED;
+            const accelBlend = 1 - Math.exp(-ACCELERATION * deltaTime);
+            droneState.velocity.x += (targetVelX - droneState.velocity.x) * accelBlend;
+            droneState.velocity.z += (targetVelZ - droneState.velocity.z) * accelBlend;
+            if (Math.abs(droneState.smoothedAltitude) > 0.02) {
+                droneState.targetAltitude += droneState.smoothedAltitude * MAX_VERTICAL_SPEED * 0.6 * deltaTime;
+            }
+            droneState.targetAltitude = Math.max(0.3, Math.min(150, droneState.targetAltitude));
+            const altError = droneState.targetAltitude - droneState.position.y;
+            const altAccel = altError * ALTITUDE_RESPONSE - droneState.velocity.y * ALTITUDE_DAMPING;
+            const groundEffect = droneState.position.y < 3 ? 1 + (3 - droneState.position.y) * 0.12 : 1;
+            let verticalAccel = -GRAVITY + altAccel * groundEffect;
+            const windAccelX = (Math.random() - 0.5) * WIND_GUST;
+            const windAccelZ = (Math.random() - 0.5) * WIND_GUST;
+            droneState.velocity.x += windAccelX * deltaTime;
+            droneState.velocity.z += windAccelZ * deltaTime;
+            droneState.velocity.y += verticalAccel * deltaTime;
+            const speed = Math.sqrt(
+                droneState.velocity.x * droneState.velocity.x +
+                droneState.velocity.y * droneState.velocity.y +
+                droneState.velocity.z * droneState.velocity.z
+            );
+            const dragFactor = Math.exp(-DRAG_COEFFICIENT * (1 + speed * 0.25) * deltaTime);
+            droneState.velocity.multiplyScalar(dragFactor);
+            const horizontalSpeed = Math.sqrt(
+                droneState.velocity.x * droneState.velocity.x +
+                droneState.velocity.z * droneState.velocity.z
+            );
+            if (horizontalSpeed > MAX_SPEED) {
+                const scale = MAX_SPEED / horizontalSpeed;
+                droneState.velocity.x *= scale;
+                droneState.velocity.z *= scale;
+            }
+            droneState.velocity.y = Math.max(-MAX_VERTICAL_SPEED, Math.min(MAX_VERTICAL_SPEED, droneState.velocity.y));
+            droneState.position.x += droneState.velocity.x * deltaTime;
+            droneState.position.y += droneState.velocity.y * deltaTime;
+            droneState.position.z += droneState.velocity.z * deltaTime;
+
+            if (droneState.position.y < 0.3) {
+                droneState.position.y = 0.3;
+                droneState.velocity.y = Math.abs(droneState.velocity.y) * 0.25;
+                droneState.velocity.x *= 0.9;
+                droneState.velocity.z *= 0.9;
+                droneState.targetAltitude = 0.35;
+            }
+
+            if (droneState.position.y > 150) {
+                droneState.position.y = 150;
+                droneState.velocity.y = Math.min(0, droneState.velocity.y);
+                droneState.targetAltitude = 150;
+            }
+            droneState.yawVelocity += droneState.smoothedYaw * YAW_ACCEL * deltaTime;
+            droneState.yawVelocity *= (1 - ANGULAR_DRAG * deltaTime);
+            droneState.yaw += droneState.yawVelocity * deltaTime;
+            if (droneState.yaw > Math.PI) droneState.yaw -= Math.PI * 2;
+            if (droneState.yaw < -Math.PI) droneState.yaw += Math.PI * 2;
+            const desiredPitch = THREE.MathUtils.clamp(droneState.smoothedForward * TILT_ANGLE - droneState.velocity.z * 0.01, -TILT_ANGLE, TILT_ANGLE);
+            const desiredRoll = THREE.MathUtils.clamp(-droneState.smoothedStrafe * TILT_ANGLE - droneState.velocity.x * 0.01, -TILT_ANGLE, TILT_ANGLE);
+
+            const pitchError = desiredPitch - droneState.pitch;
+            const rollError = desiredRoll - droneState.roll;
+
+            droneState.pitchVelocity += pitchError * AUTO_LEVEL * deltaTime;
+            droneState.rollVelocity += rollError * AUTO_LEVEL * deltaTime;
+
+            droneState.pitchVelocity *= (1 - ANGULAR_DRAG * deltaTime);
+            droneState.rollVelocity *= (1 - ANGULAR_DRAG * deltaTime);
+
+            droneState.pitch += droneState.pitchVelocity * deltaTime;
+            droneState.roll += droneState.rollVelocity * deltaTime;
+            droneState.wobblePhase += deltaTime * 3;
+            const wobbleIntensity = 0.012 * (1 + speed * 0.015);
+            const wobbleRoll = Math.sin(droneState.wobblePhase * 1.3) * wobbleIntensity;
+            const wobblePitch = Math.cos(droneState.wobblePhase * 0.9) * wobbleIntensity;
+            const wobbleYaw = Math.sin(droneState.wobblePhase * 0.7) * wobbleIntensity * 0.25;
+            drone.position.copy(droneState.position);
+            drone.rotation.set(
+                droneState.pitch + wobblePitch,
+                droneState.yaw + wobbleYaw,
+                droneState.roll + wobbleRoll,
+                'YXZ'
+            );
+            if (shadowBlob) {
+                shadowBlob.position.set(droneState.position.x, 0.02, droneState.position.z);
+                const s = THREE.MathUtils.clamp(1 + droneState.position.y * 0.02, 1, 6);
+                shadowBlob.scale.set(s, s, 1);
+                shadowBlob.material.opacity = THREE.MathUtils.clamp(0.35 - droneState.position.y * 0.002, 0.05, 0.35);
+            }
+            const baseRPM = 55;
+            const throttleBoost = Math.abs(altError) * 8 + Math.abs(droneState.smoothedAltitude) * 25;
+            const movementBoost = (Math.abs(droneState.smoothedForward) + Math.abs(droneState.smoothedStrafe)) * 20;
+            const propellerSpeed = baseRPM + throttleBoost + movementBoost;
+            propellers.forEach((prop, index) => {
+                const direction = (index === 0 || index === 2) ? 1 : -1;
+                prop.rotation.y += direction * propellerSpeed * deltaTime;
+            });
+        }
+        
+        
+        function updateCamera(deltaTime) {
+            const cameraDistance = 10;
+            const cameraHeight = 4;
+            const behindX = -Math.sin(droneState.yaw) * cameraDistance;
+            const behindZ = Math.cos(droneState.yaw) * cameraDistance;
+            
+            const idealPosition = new THREE.Vector3(
+                droneState.position.x + behindX,
+                droneState.position.y + cameraHeight,
+                droneState.position.z + behindZ
+            );
+            const lookAheadDist = 15;
+            const aheadX = Math.sin(droneState.yaw) * lookAheadDist;
+            const aheadZ = -Math.cos(droneState.yaw) * lookAheadDist;
+            
+            const idealLookAt = new THREE.Vector3(
+                droneState.position.x + aheadX,
+                droneState.position.y - 2,
+                droneState.position.z + aheadZ
+            );
+            const positionLerp = 1 - Math.pow(0.001, deltaTime);
+            const lookAtLerp = 1 - Math.pow(0.0005, deltaTime);
+            
+            cameraState.position.lerp(idealPosition, positionLerp);
+            cameraState.lookAt.lerp(idealLookAt, lookAtLerp);
+            camera.position.copy(cameraState.position);
+            camera.lookAt(cameraState.lookAt);
+        }
+        
+        function updateHUD(coords) {
+            const horizontalSpeed = Math.sqrt(
+                droneState.velocity.x * droneState.velocity.x +
+                droneState.velocity.z * droneState.velocity.z
+            );
+            let heading = -droneState.yaw * (180 / Math.PI);
+            heading = ((heading % 360) + 360) % 360;
+            const pitchDeg = droneState.pitch * (180 / Math.PI);
+            const rollDeg = droneState.roll * (180 / Math.PI);
+            const yawRateDeg = droneState.yawVelocity * (180 / Math.PI);
+            document.getElementById('hud-lat').textContent = coords.lat.toFixed(6);
+            document.getElementById('hud-lng').textContent = coords.lng.toFixed(6);
+            document.getElementById('hud-alt').textContent = coords.alt.toFixed(1) + ' m';
+            document.getElementById('hud-speed').textContent = horizontalSpeed.toFixed(1) + ' m/s';
+            document.getElementById('hud-vspeed').textContent = droneState.velocity.y.toFixed(1) + ' m/s';
+            document.getElementById('hud-heading').textContent = heading.toFixed(0) + ' deg';
+            document.getElementById('hud-pitch').textContent = pitchDeg.toFixed(1) + ' deg';
+            document.getElementById('hud-roll').textContent = rollDeg.toFixed(1) + ' deg';
+            document.getElementById('hud-yawrate').textContent = yawRateDeg.toFixed(1) + ' deg/s';
+            document.getElementById('hud-velx').textContent = droneState.velocity.x.toFixed(2) + ' m/s';
+            document.getElementById('hud-vely').textContent = droneState.velocity.y.toFixed(2) + ' m/s';
+            document.getElementById('hud-velz').textContent = droneState.velocity.z.toFixed(2) + ' m/s';
+            document.getElementById('hud-targetalt').textContent = droneState.targetAltitude.toFixed(1) + ' m';
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = clock.getDelta();
+            updatePhysics(deltaTime);
+            updateCamera(deltaTime);
+            const coords = updateMap();
+            updateHUD(coords);
+            runDetection();
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 0);
+            renderer.clear(true, true, true);
+            renderer.render(scene, camera);
+        }
+
+        async function initDetection() {
+            detectionCanvas = document.getElementById('detection-canvas');
+            if (detectionCanvas) {
+                detectionCanvas.width = 200;
+                detectionCanvas.height = 200;
+                detectionCtx = detectionCanvas.getContext('2d');
+                console.log('Minimap detection overlay initialized');
+            }
+            webcamDetectionCanvas = document.getElementById('webcam-detection-canvas');
+            if (webcamDetectionCanvas) {
+                webcamDetectionCanvas.width = 200;
+                webcamDetectionCanvas.height = 150;
+                webcamDetectionCtx = webcamDetectionCanvas.getContext('2d');
+            }
+            webcamVideo = document.getElementById('webcam-video');
+            webcamFeed = document.getElementById('webcam-feed');
+            const connectBtn = document.getElementById('connect-webcam-btn');
+            if (connectBtn) {
+                connectBtn.addEventListener('click', connectWebcam);
+            }
+
+            updateDetectionStatus('Loading TensorFlow.js...');
+            
+            try {
+                await tf.ready();
+                console.log('TensorFlow.js ready, backend:', tf.getBackend());
+                
+                updateDetectionStatus('Loading COCO-SSD model...');
+                detectionModel = await cocoSsd.load({
+                    base: 'mobilenet_v2'
+                });
+                
+                console.log('COCO-SSD model loaded successfully');
+                updateDetectionStatus('Model ready - Click CONNECT CAMERA');
+                updateWebcamStatus('READY');
+                
+            } catch (error) {
+                console.error('Failed to load detection model:', error);
+                updateDetectionStatus('Model error: ' + error.message);
+            }
+        }
+
+        async function connectWebcam() {
+            const connectBtn = document.getElementById('connect-webcam-btn');
+            
+            try {
+                updateWebcamStatus('CONNECTING...');
+                
+                const constraints = {
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'environment'
+                    },
+                    audio: false
+                };
+
+                webcamStream = await navigator.mediaDevices.getUserMedia(constraints);
+                if (webcamVideo) {
+                    webcamVideo.srcObject = webcamStream;
+                    await webcamVideo.play();
+                }
+                if (webcamFeed) {
+                    webcamFeed.srcObject = webcamStream;
+                    await webcamFeed.play();
+                }
+                if (connectBtn) {
+                    connectBtn.style.display = 'none';
+                }
+
+                isWebcamConnected = true;
+                updateWebcamStatus('LIVE');
+                updateDetectionStatus('REAL-TIME DETECTION ACTIVE');
+                console.log('Webcam connected successfully');
+                
+            } catch (error) {
+                console.error('Webcam connection failed:', error);
+                updateWebcamStatus('ERROR');
+                updateDetectionStatus('Camera error: ' + error.message);
+                
+                if (connectBtn) {
+                    connectBtn.textContent = 'RETRY CONNECTION';
+                }
+            }
+        }
+
+        function updateDetectionStatus(status) {
+            const statusEl = document.getElementById('detection-status');
+            if (statusEl) {
+                statusEl.textContent = status;
+            }
+        }
+
+        function updateWebcamStatus(status) {
+            const statusEl = document.getElementById('webcam-status');
+            if (statusEl) {
+                statusEl.textContent = status;
+                if (status === 'LIVE') {
+                    statusEl.style.color = '#00ff00';
+                } else if (status === 'ERROR') {
+                    statusEl.style.color = '#ff0000';
+                } else {
+                    statusEl.style.color = '#888';
+                }
+            }
+        }
+
+        async function runDetection() {
+            if (!detectionModel || !detectionCtx) {
+                return;
+            }
+            if (!isWebcamConnected || !webcamVideo || webcamVideo.readyState < 2) {
+                return;
+            }
+            const now = Date.now();
+            if (now - lastDetectionTime < DETECTION_INTERVAL) return;
+            if (isDetecting) return;
+            
+            lastDetectionTime = now;
+            isDetecting = true;
+            
+            try {
+                const predictions = await detectionModel.detect(webcamVideo, 20, 0.25);
+                
+                const videoWidth = webcamVideo.videoWidth || 640;
+                const videoHeight = webcamVideo.videoHeight || 480;
+                detectionCtx.clearRect(0, 0, 200, 200);
+                if (webcamDetectionCtx) {
+                    webcamDetectionCtx.clearRect(0, 0, 200, 150);
+                }
+                
+                if (predictions.length > 0) {
+                    const scaleXMinimap = 200 / videoWidth;
+                    const scaleYMinimap = 200 / videoHeight;
+                    const scaleXWebcam = 200 / videoWidth;
+                    const scaleYWebcam = 150 / videoHeight;
+                    
+                    for (const prediction of predictions) {
+                        const minimapPrediction = {
+                            ...prediction,
+                            bbox: [
+                                prediction.bbox[0] * scaleXMinimap,
+                                prediction.bbox[1] * scaleYMinimap,
+                                prediction.bbox[2] * scaleXMinimap,
+                                prediction.bbox[3] * scaleYMinimap
+                            ]
+                        };
+                        drawDetectionBox(minimapPrediction, detectionCtx, 200, 200);
+                        if (webcamDetectionCtx) {
+                            const webcamPrediction = {
+                                ...prediction,
+                                bbox: [
+                                    prediction.bbox[0] * scaleXWebcam,
+                                    prediction.bbox[1] * scaleYWebcam,
+                                    prediction.bbox[2] * scaleXWebcam,
+                                    prediction.bbox[3] * scaleYWebcam
+                                ]
+                            };
+                            drawDetectionBox(webcamPrediction, webcamDetectionCtx, 200, 150);
+                        }
+                        logDetection(prediction);
+                    }
+                    
+                    updateDetectionStatus(`🔴 ${predictions.length} DETECTED`, true);
+                } else {
+                    updateDetectionStatus('Scanning...', true);
+                }
+                
+            } catch (error) {
+                console.error('Detection error:', error);
+            }
+            
+            isDetecting = false;
+        }
+
+        function drawDetectionBox(prediction, ctx, canvasWidth, canvasHeight) {
+            const [x, y, width, height] = prediction.bbox;
+            const minSize = 15;
+            const drawWidth = Math.max(width, minSize);
+            const drawHeight = Math.max(height, minSize);
+            ctx.shadowColor = '#00ff00';
+            ctx.shadowBlur = 6;
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, drawWidth, drawHeight);
+            ctx.shadowBlur = 0;
+            const cornerLen = Math.min(8, drawWidth / 3, drawHeight / 3);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, y + cornerLen);
+            ctx.lineTo(x, y);
+            ctx.lineTo(x + cornerLen, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x + drawWidth - cornerLen, y);
+            ctx.lineTo(x + drawWidth, y);
+            ctx.lineTo(x + drawWidth, y + cornerLen);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y + drawHeight - cornerLen);
+            ctx.lineTo(x, y + drawHeight);
+            ctx.lineTo(x + cornerLen, y + drawHeight);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x + drawWidth - cornerLen, y + drawHeight);
+            ctx.lineTo(x + drawWidth, y + drawHeight);
+            ctx.lineTo(x + drawWidth, y + drawHeight - cornerLen);
+            ctx.stroke();
+            const label = `${prediction.class.toUpperCase()} ${(prediction.score * 100).toFixed(0)}%`;
+            ctx.font = 'bold 10px Rubik, sans-serif';
+            const textWidth = ctx.measureText(label).width;
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.9)';
+            const labelY = y > 14 ? y - 14 : y + drawHeight + 2;
+            ctx.fillRect(x, labelY, textWidth + 8, 14);
+            ctx.fillStyle = '#000000';
+            ctx.fillText(label, x + 4, labelY + 10);
+        }
+
+        function logDetection(prediction) {
+            totalDetections++;
+            
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { 
+                hour12: false, 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            
+            const entry = {
+                time: timeStr,
+                class: prediction.class,
+                confidence: (prediction.score * 100).toFixed(1)
+            };
+            detectionLog.unshift(entry);
+            if (detectionLog.length > 50) {
+                detectionLog.pop();
+            }
+            updateLogDisplay();
+        }
+
+        function updateLogDisplay() {
+            const logContent = document.getElementById('detection-log-content');
+            if (!logContent) return;
+            
+            logContent.innerHTML = detectionLog.map(entry => `
+                <div class="detection-entry">
+                    <span class="detection-time">${entry.time}</span>
+                    <span class="detection-class">${entry.class.toUpperCase()}</span>
+                    <span class="detection-confidence">${entry.confidence}% confidence</span>
+                </div>
+            `).join('');
+        }
+
+        function updateDetectionCount() {
+            const countEl = document.getElementById('detection-count');
+            if (countEl) {
+                countEl.textContent = `${totalDetections} objects detected`;
+            }
+        }
+        
+        function init() {
+            initMap();
+            initThree();
+            initControls();
+            initDetection();
+            animate();
+            
+            console.log('Drone Map initialized!');
+            console.log('Controls: WASD to move, QE to rotate, RF for altitude');
+        }
+        init();
+    </script>
+</body>
+</html>
