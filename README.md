@@ -2,8 +2,6 @@
 
 DroneMap is a browser-based drone simulation that blends a realistic quadcopter feel with real satellite imagery.
 
-![alt text]((https://imagedelivery.net/WChN5ZQChhT8DYNS_FK_sA/568a8a5d-d955-4f81-4acd-9b9de9308d00/public))
-
 ## Big Idea
 
 What if one drone could scan the entire Earth and collect every visible detail of our planet?
